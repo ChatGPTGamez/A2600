@@ -1,0 +1,57 @@
+# ===== Build output =====
+a2600
+a.out
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+*.app
+
+# ===== Make / CMake =====
+Makefile
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+build/
+compile_commands.json
+
+# ===== Debug / profiling =====
+*.gcda
+*.gcno
+*.gcov
+*.prof
+*.gprof
+gmon.out
+
+# ===== SDL runtime junk =====
+*.log
+
+# ===== OS junk =====
+.DS_Store
+Thumbs.db
+
+# ===== Editor junk =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== ROMs =====
+*.bin
+*.rom
+*.a26
+
+# ===== Savestates / dumps =====
+*.sav
+*.state
+*.dump
+
+# ===== Local config =====
+.env
