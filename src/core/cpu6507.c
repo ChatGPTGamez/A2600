@@ -144,6 +144,13 @@ static inline void sbc(CPU6507* c, u8 v) {
     }
 }
 
+static inline void cmp_u8(CPU6507* c, u8 lhs, u8 rhs) {
+    u16 diff = (u16)lhs - (u16)rhs;
+    if (lhs >= rhs) c->P |= CPU_FLAG_C;
+    else c->P &= (u8)~CPU_FLAG_C;
+    setZN(c, (u8)diff);
+}
+
 void cpu6507_reset(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
     (void)wfn;
     memset(c, 0, sizeof(*c));
@@ -203,6 +210,19 @@ int cpu6507_step(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
         case 0x2A: c->A = rol_u8(c, c->A); cycles=2; break;
         case 0x6A: c->A = ror_u8(c, c->A); cycles=2; break;
 
+        case 0x06: { u16 a = zp(c,ctx,rfn); u8 v = asl_u8(c, READ(a)); WRITE(a, v); cycles = 5; } break;
+        case 0x0E: { u16 a = abs_(c,ctx,rfn); u8 v = asl_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x16: { u16 a = zpx(c,ctx,rfn); u8 v = asl_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x1E: { u16 a = absx(c,ctx,rfn,NULL); u8 v = asl_u8(c, READ(a)); WRITE(a, v); cycles = 7; } break;
+        case 0x4E: { u16 a = abs_(c,ctx,rfn); u8 v = lsr_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x56: { u16 a = zpx(c,ctx,rfn); u8 v = lsr_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x5E: { u16 a = absx(c,ctx,rfn,NULL); u8 v = lsr_u8(c, READ(a)); WRITE(a, v); cycles = 7; } break;
+        case 0x2E: { u16 a = abs_(c,ctx,rfn); u8 v = rol_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x36: { u16 a = zpx(c,ctx,rfn); u8 v = rol_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x3E: { u16 a = absx(c,ctx,rfn,NULL); u8 v = rol_u8(c, READ(a)); WRITE(a, v); cycles = 7; } break;
+        case 0x76: { u16 a = zpx(c,ctx,rfn); u8 v = ror_u8(c, READ(a)); WRITE(a, v); cycles = 6; } break;
+        case 0x7E: { u16 a = absx(c,ctx,rfn,NULL); u8 v = ror_u8(c, READ(a)); WRITE(a, v); cycles = 7; } break;
+
         // --- LDA (subset) ---
         case 0xA9: LD(c->A, READ(imm(c))); cycles=2; break;
         case 0xA5: LD(c->A, READ(zp(c,ctx,rfn))); cycles=3; break;
@@ -212,6 +232,12 @@ int cpu6507_step(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
         case 0xB9: LD(c->A, READ(absy(c,ctx,rfn,&pcross))); cycles=4+pcross; break;
         case 0xA1: LD(c->A, READ(indx(c,ctx,rfn))); cycles=6; break;
         case 0xB1: LD(c->A, READ(indy(c,ctx,rfn,&pcross))); cycles=5+pcross; break;
+        case 0xA3: { u8 v = READ(indx(c,ctx,rfn)); c->A = v; c->X = v; setZN(c, v); cycles = 6; } break; // LAX (zp,X)
+        case 0xA7: { u8 v = READ(zp(c,ctx,rfn)); c->A = v; c->X = v; setZN(c, v); cycles = 3; } break; // LAX zp
+        case 0xAF: { u8 v = READ(abs_(c,ctx,rfn)); c->A = v; c->X = v; setZN(c, v); cycles = 4; } break; // LAX abs
+        case 0xB3: { u8 v = READ(indy(c,ctx,rfn,&pcross)); c->A = v; c->X = v; setZN(c, v); cycles = 5 + pcross; } break; // LAX (zp),Y
+        case 0xB7: { u8 v = READ(zpy(c,ctx,rfn)); c->A = v; c->X = v; setZN(c, v); cycles = 4; } break; // LAX zp,Y
+        case 0xBF: { u8 v = READ(absy(c,ctx,rfn,&pcross)); c->A = v; c->X = v; setZN(c, v); cycles = 4 + pcross; } break; // LAX abs,Y
 
         // --- JMP/JSR/RTS/RTI/BRK ---
         case 0x4C: c->PC = abs_(c,ctx,rfn); cycles=3; break;
@@ -284,6 +310,12 @@ int cpu6507_step(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
         case 0x28: c->P = (u8)((pull(c,ctx,rfn) & (u8)~CPU_FLAG_B) | CPU_FLAG_U); cycles=4; break; // PLP
 
         case 0xEA: cycles=2; break; // NOP
+        case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xFA: cycles = 2; break; // undocumented NOP
+        case 0x80: case 0x82: case 0x89: case 0xC2: case 0xE2: (void)READ(imm(c)); cycles = 2; break;
+        case 0x04: case 0x44: case 0x64: (void)READ(zp(c,ctx,rfn)); cycles = 3; break;
+        case 0x14: case 0x34: case 0x54: case 0x74: case 0xD4: case 0xF4: (void)READ(zpx(c,ctx,rfn)); cycles = 4; break;
+        case 0x0C: (void)READ(abs_(c,ctx,rfn)); cycles = 4; break;
+        case 0x1C: case 0x3C: case 0x5C: case 0x7C: case 0xDC: case 0xFC: (void)READ(absx(c,ctx,rfn,NULL)); cycles = 4; break;
 
         case 0xA2: LD(c->X, READ(imm(c))); cycles = 2; break;  // LDX #imm
         case 0xA6: LD(c->X, READ(zp(c,ctx,rfn))); cycles = 3; break;   // LDX zp
@@ -318,6 +350,14 @@ int cpu6507_step(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
             WRITE(abs_(c,ctx,rfn), c->A);
             cycles = 4;
         break;  // STA abs
+        case 0x81: WRITE(indx(c,ctx,rfn), c->A); cycles = 6; break;
+        case 0x91: WRITE(indy(c,ctx,rfn,NULL), c->A); cycles = 6; break;
+        case 0x9D: WRITE(absx(c,ctx,rfn,NULL), c->A); cycles = 5; break;
+        case 0x8C: WRITE(abs_(c,ctx,rfn), c->Y); cycles = 4; break;
+        case 0x83: WRITE(indx(c,ctx,rfn), (u8)(c->A & c->X)); cycles = 6; break; // SAX
+        case 0x87: WRITE(zp(c,ctx,rfn), (u8)(c->A & c->X)); cycles = 3; break; // SAX
+        case 0x8F: WRITE(abs_(c,ctx,rfn), (u8)(c->A & c->X)); cycles = 4; break; // SAX
+        case 0x97: WRITE(zpy(c,ctx,rfn), (u8)(c->A & c->X)); cycles = 4; break; // SAX
 
         case 0x85:
             WRITE(zp(c,ctx,rfn), c->A);
@@ -336,28 +376,24 @@ int cpu6507_step(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
             LD(c->Y, READ(imm(c)));
             cycles = 2;
             break;  // LDY #imm
+        case 0xAC: LD(c->Y, READ(abs_(c,ctx,rfn))); cycles = 4; break;
+        case 0xBC: LD(c->Y, READ(absx(c,ctx,rfn,&pcross))); cycles = 4 + pcross; break;
 
         case 0xC9: {
             u8 v = READ(imm(c));
-            u16 diff = (u16)c->A - (u16)v;
-
-            if (c->A >= v) c->P |= CPU_FLAG_C;
-            else c->P &= (u8)~CPU_FLAG_C;
-
-            setZN(c, (u8)diff);
+            cmp_u8(c, c->A, v);
             cycles = 2;
         } break;  // CMP #imm
 
         case 0xC5: {
             u8 v = READ(zp(c,ctx,rfn));
-            u16 diff = (u16)c->A - (u16)v;
-
-            if (c->A >= v) c->P |= CPU_FLAG_C;
-            else c->P &= (u8)~CPU_FLAG_C;
-
-            setZN(c, (u8)diff);
+            cmp_u8(c, c->A, v);
             cycles = 3;
         } break;  // CMP zp
+        case 0xC1: { u8 v = READ(indx(c,ctx,rfn)); cmp_u8(c, c->A, v); cycles = 6; } break;
+        case 0xCD: { u8 v = READ(abs_(c,ctx,rfn)); cmp_u8(c, c->A, v); cycles = 4; } break;
+        case 0xD1: { u8 v = READ(indy(c,ctx,rfn,&pcross)); cmp_u8(c, c->A, v); cycles = 5 + pcross; } break;
+        case 0xDD: { u8 v = READ(absx(c,ctx,rfn,&pcross)); cmp_u8(c, c->A, v); cycles = 4 + pcross; } break;
         case 0x84:
             WRITE(zp(c,ctx,rfn), c->Y);
             cycles = 3;
@@ -378,6 +414,12 @@ int cpu6507_step(CPU6507* c, void* ctx, cpu_read_fn rfn, cpu_write_fn wfn) {
             setZN(c, c->A);
             cycles = 2;
             break;  // EOR #imm
+        case 0x41: c->A ^= READ(indx(c,ctx,rfn)); setZN(c, c->A); cycles = 6; break;
+        case 0x4D: c->A ^= READ(abs_(c,ctx,rfn)); setZN(c, c->A); cycles = 4; break;
+        case 0x51: c->A ^= READ(indy(c,ctx,rfn,&pcross)); setZN(c, c->A); cycles = 5 + pcross; break;
+        case 0x55: c->A ^= READ(zpx(c,ctx,rfn)); setZN(c, c->A); cycles = 4; break;
+        case 0x59: c->A ^= READ(absy(c,ctx,rfn,&pcross)); setZN(c, c->A); cycles = 4 + pcross; break;
+        case 0x5D: c->A ^= READ(absx(c,ctx,rfn,&pcross)); setZN(c, c->A); cycles = 4 + pcross; break;
 case 0xC6: {
     u16 a = zp(c,ctx,rfn);
     u8 v = READ(a);
@@ -434,12 +476,7 @@ case 0xA4:
     break;  // LDY zp
 case 0xE0: {
     u8 v = READ(imm(c));
-    u16 diff = (u16)c->X - (u16)v;
-
-    if (c->X >= v) c->P |= CPU_FLAG_C;
-    else           c->P &= (u8)~CPU_FLAG_C;
-
-    setZN(c, (u8)diff);
+    cmp_u8(c, c->X, v);
     cycles = 2;
 } break;  // CPX #imm
 case 0x25:
@@ -454,24 +491,16 @@ case 0x8A:
     break;  // TXA
 case 0xE4: {
     u8 v = READ(zp(c,ctx,rfn));
-    u16 diff = (u16)c->X - (u16)v;
-
-    if (c->X >= v) c->P |= CPU_FLAG_C;
-    else           c->P &= (u8)~CPU_FLAG_C;
-
-    setZN(c, (u8)diff);
+    cmp_u8(c, c->X, v);
     cycles = 3;
 } break;  // CPX zp
+case 0xEC: { u8 v = READ(abs_(c,ctx,rfn)); cmp_u8(c, c->X, v); cycles = 4; } break;
 case 0xC0: {
     u8 v = READ(imm(c));
-    u16 diff = (u16)c->Y - (u16)v;
-
-    if (c->Y >= v) c->P |= CPU_FLAG_C;
-    else           c->P &= (u8)~CPU_FLAG_C;
-
-    setZN(c, (u8)diff);
+    cmp_u8(c, c->Y, v);
     cycles = 2;
 } break;  // CPY #imm
+case 0xCC: { u8 v = READ(abs_(c,ctx,rfn)); cmp_u8(c, c->Y, v); cycles = 4; } break;
 case 0xAA:
     c->X = c->A;
     setZN(c, c->X);
@@ -484,12 +513,7 @@ case 0x98:
     break;  // TYA
 case 0xD5: {
     u8 v = READ(zpx(c,ctx,rfn));
-    u16 diff = (u16)c->A - (u16)v;
-
-    if (c->A >= v) c->P |= CPU_FLAG_C;
-    else           c->P &= (u8)~CPU_FLAG_C;
-
-    setZN(c, (u8)diff);
+    cmp_u8(c, c->A, v);
     cycles = 4;
 } break;  // CMP zp,X
 case 0x8E:
@@ -510,12 +534,7 @@ case 0x2C: {
 } break;  // BIT abs
 case 0xC4: {
     u8 v = READ(zp(c,ctx,rfn));
-    u16 diff = (u16)c->Y - (u16)v;
-
-    if (c->Y >= v) c->P |= CPU_FLAG_C;
-    else           c->P &= (u8)~CPU_FLAG_C;
-
-    setZN(c, (u8)diff);
+    cmp_u8(c, c->Y, v);
     cycles = 3;
 } break;  // CPY zp
 case 0x2D:
@@ -604,6 +623,11 @@ case 0x11: {
     setZN(c, c->A);
     cycles = 5 + pcross;
 } break;  // ORA (zp),Y
+case 0x01: c->A |= READ(indx(c,ctx,rfn)); setZN(c, c->A); cycles = 6; break;
+case 0x0D: c->A |= READ(abs_(c,ctx,rfn)); setZN(c, c->A); cycles = 4; break;
+case 0x1D: c->A |= READ(absx(c,ctx,rfn,&pcross)); setZN(c, c->A); cycles = 4 + pcross; break;
+case 0x21: c->A &= READ(indx(c,ctx,rfn)); setZN(c, c->A); cycles = 6; break;
+case 0x31: c->A &= READ(indy(c,ctx,rfn,&pcross)); setZN(c, c->A); cycles = 5 + pcross; break;
 case 0xEE: {
     u16 a = abs_(c,ctx,rfn);
     u8 v = (u8)(READ(a) + 1);
@@ -649,6 +673,8 @@ case 0xD6: {
     setZN(c, v);
     cycles = 6;
 } break;  // DEC zp,X
+case 0xCE: { u16 a = abs_(c,ctx,rfn); u8 v = (u8)(READ(a) - 1); WRITE(a, v); setZN(c, v); cycles = 6; } break;
+case 0xDE: { u16 a = absx(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) - 1); WRITE(a, v); setZN(c, v); cycles = 7; } break;
 case 0xF6: {
     u16 a = zpx(c,ctx,rfn);
     u8 v = (u8)(READ(a) + 1);
@@ -656,6 +682,7 @@ case 0xF6: {
     setZN(c, v);
     cycles = 6;
 } break;  // INC zp,X
+case 0xFE: { u16 a = absx(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) + 1); WRITE(a, v); setZN(c, v); cycles = 7; } break;
 case 0xB4:
     LD(c->Y, READ(zpx(c,ctx,rfn)));
     cycles = 4;
@@ -667,6 +694,74 @@ case 0x39: {
     setZN(c, c->A);
     cycles = 4 + pcross;
 } break;  // AND abs,Y
+
+        // --- Undocumented RMW + ALU combos ---
+        case 0x03: { u16 a = indx(c,ctx,rfn); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 8; } break; // SLO
+        case 0x07: { u16 a = zp(c,ctx,rfn); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 5; } break;
+        case 0x0F: { u16 a = abs_(c,ctx,rfn); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 6; } break;
+        case 0x13: { u16 a = indy(c,ctx,rfn,NULL); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 8; } break;
+        case 0x17: { u16 a = zpx(c,ctx,rfn); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 6; } break;
+        case 0x1F: { u16 a = absx(c,ctx,rfn,NULL); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 7; } break;
+
+        case 0x1B: { u16 a = absy(c,ctx,rfn,NULL); u8 v = READ(a); if (v & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; v = (u8)(v << 1); WRITE(a,v); c->A |= v; setZN(c,c->A); cycles = 7; } break;
+
+        case 0x23: { u16 a = indx(c,ctx,rfn); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 8; } break; // RLA
+        case 0x27: { u16 a = zp(c,ctx,rfn); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 5; } break;
+        case 0x2F: { u16 a = abs_(c,ctx,rfn); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 6; } break;
+        case 0x33: { u16 a = indy(c,ctx,rfn,NULL); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 8; } break;
+        case 0x37: { u16 a = zpx(c,ctx,rfn); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 6; } break;
+        case 0x3F: { u16 a = absx(c,ctx,rfn,NULL); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 7; } break;
+
+        case 0x3B: { u16 a = absy(c,ctx,rfn,NULL); u8 v = rol_u8(c, READ(a)); WRITE(a,v); c->A &= v; setZN(c,c->A); cycles = 7; } break;
+
+        case 0x43: { u16 a = indx(c,ctx,rfn); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 8; } break; // SRE
+        case 0x47: { u16 a = zp(c,ctx,rfn); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 5; } break;
+        case 0x4F: { u16 a = abs_(c,ctx,rfn); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 6; } break;
+        case 0x53: { u16 a = indy(c,ctx,rfn,NULL); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 8; } break;
+        case 0x57: { u16 a = zpx(c,ctx,rfn); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 6; } break;
+        case 0x5F: { u16 a = absx(c,ctx,rfn,NULL); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 7; } break;
+
+        case 0x5B: { u16 a = absy(c,ctx,rfn,NULL); u8 v = lsr_u8(c, READ(a)); WRITE(a,v); c->A ^= v; setZN(c,c->A); cycles = 7; } break;
+
+        case 0x63: { u16 a = indx(c,ctx,rfn); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 8; } break; // RRA
+        case 0x67: { u16 a = zp(c,ctx,rfn); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 5; } break;
+        case 0x6F: { u16 a = abs_(c,ctx,rfn); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 6; } break;
+        case 0x73: { u16 a = indy(c,ctx,rfn,NULL); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 8; } break;
+        case 0x77: { u16 a = zpx(c,ctx,rfn); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 6; } break;
+        case 0x7B: { u16 a = absy(c,ctx,rfn,NULL); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 7; } break;
+        case 0x7F: { u16 a = absx(c,ctx,rfn,NULL); u8 v = ror_u8(c, READ(a)); WRITE(a,v); adc(c, v); cycles = 7; } break;
+
+        case 0xE3: { u16 a = indx(c,ctx,rfn); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 8; } break; // ISC
+        case 0xE7: { u16 a = zp(c,ctx,rfn); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 5; } break;
+        case 0xEF: { u16 a = abs_(c,ctx,rfn); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 6; } break;
+        case 0xF3: { u16 a = indy(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 8; } break;
+        case 0xF7: { u16 a = zpx(c,ctx,rfn); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 6; } break;
+        case 0xFB: { u16 a = absy(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 7; } break;
+        case 0xFF: { u16 a = absx(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) + 1); WRITE(a, v); sbc(c, v); cycles = 7; } break;
+
+        case 0xC3: { u16 a = indx(c,ctx,rfn); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 8; } break; // DCP
+        case 0xC7: { u16 a = zp(c,ctx,rfn); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 5; } break;
+        case 0xCF: { u16 a = abs_(c,ctx,rfn); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 6; } break;
+        case 0xD3: { u16 a = indy(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 8; } break;
+        case 0xD7: { u16 a = zpx(c,ctx,rfn); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 6; } break;
+        case 0xDB: { u16 a = absy(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 7; } break;
+        case 0xDF: { u16 a = absx(c,ctx,rfn,NULL); u8 v = (u8)(READ(a) - 1); WRITE(a, v); cmp_u8(c, c->A, v); cycles = 7; } break;
+
+        case 0x0B: case 0x2B: c->A &= READ(imm(c)); setZN(c, c->A); if (c->A & 0x80) c->P |= CPU_FLAG_C; else c->P &= (u8)~CPU_FLAG_C; cycles = 2; break; // ANC
+        case 0x4B: c->A &= READ(imm(c)); c->A = lsr_u8(c, c->A); cycles = 2; break; // ALR
+        case 0x6B: c->A &= READ(imm(c)); c->A = ror_u8(c, c->A); if (((c->A >> 5) ^ (c->A >> 6)) & 1) c->P |= CPU_FLAG_V; else c->P &= (u8)~CPU_FLAG_V; cycles = 2; break; // ARR (approx)
+        case 0x8B: c->A = (u8)(c->X & READ(imm(c))); setZN(c, c->A); cycles = 2; break; // XAA (unstable, approximated)
+        case 0xAB: c->A = READ(imm(c)); c->X = c->A; setZN(c, c->A); cycles = 2; break; // LAX #imm
+        case 0xCB: { u8 v = READ(imm(c)); c->X = (u8)((c->A & c->X) - v); cmp_u8(c, (u8)(c->A & c->X), v); setZN(c, c->X); cycles = 2; } break; // AXS
+        case 0xBB: { u8 v = READ(absy(c,ctx,rfn,&pcross)); c->A = (u8)(v & c->S); c->X = c->A; c->S = c->A; setZN(c, c->A); cycles = 4 + pcross; } break; // LAS
+        case 0x9B: { u16 a = absy(c,ctx,rfn,NULL); u8 hi = (u8)(((a >> 8) + 1) & 0xFF); u8 v = (u8)(c->A & c->X & hi); c->S = (u8)(c->A & c->X); WRITE(a, v); cycles = 5; } break; // TAS
+        case 0x9C: { u16 a = absx(c,ctx,rfn,NULL); u8 hi = (u8)(((a >> 8) + 1) & 0xFF); WRITE(a, (u8)(c->Y & hi)); cycles = 5; } break; // SHY
+        case 0x9E: { u16 a = absy(c,ctx,rfn,NULL); u8 hi = (u8)(((a >> 8) + 1) & 0xFF); WRITE(a, (u8)(c->X & hi)); cycles = 5; } break; // SHX
+        case 0x9F: { u16 a = absy(c,ctx,rfn,NULL); u8 hi = (u8)(((a >> 8) + 1) & 0xFF); WRITE(a, (u8)(c->A & c->X & hi)); cycles = 5; } break; // AHX abs,Y
+        case 0x93: { u16 a = indy(c,ctx,rfn,NULL); u8 hi = (u8)(((a >> 8) + 1) & 0xFF); WRITE(a, (u8)(c->A & c->X & hi)); cycles = 6; } break; // AHX (zp),Y
+
+        case 0xEB: sbc(c, READ(imm(c))); cycles = 2; break; // unofficial SBC immediate
+
 
         // --- Illegal/JAM ---
         case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52:
